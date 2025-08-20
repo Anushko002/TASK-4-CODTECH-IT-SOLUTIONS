@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Productivity Dashboard</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <style>
+    body{ margin:0; font-family:system-ui,Segoe UI,Roboto,Arial; background:#0f1220; color:#e7e9ff; }
+    .wrap{ max-width:1000px; margin:20px auto; padding:16px; }
+    h2{ color:#6c8cff; }
+    .grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .card{ background:#151936; border:1px solid rgba(255,255,255,.08); border-radius:12px; padding:14px; }
+    label{ color:#9aa1c2; margin-right:8px; }
+    select,input{ background:#0f132b; color:#e7e9ff; border:1px solid rgba(255,255,255,.1); border-radius:8px; padding:6px 10px; }
+    canvas{ background:#0f132b; padding:8px; border-radius:10px; }
+    table{ width:100%; border-collapse:collapse; }
+    th,td{ text-align:left; padding:8px; border-bottom:1px solid rgba(255,255,255,.08); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h2>📊 Productivity Dashboard</h2>
+    <div style="margin:8px 0 16px">
+      <label for="day">Day</label>
+      <input id="day" type="date">
+      <button id="load">Load</button>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Top Sites</h3>
+        <table id="table"></table>
+      </div>
+      <div class="card">
+        <h3>Time by Category</h3>
+        <canvas id="pie" height="280"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const dayInput = document.getElementById('day');
+    const table = document.getElementById('table');
+
+    // default to today
+    const today = new Date().toISOString().slice(0,10);
+    dayInput.value = today;
+
+    async function load(){
+      const r = await fetch(`/summary?day=${encodeURIComponent(dayInput.value)}`);
+      const data = await r.json(); // { domain: ms }
+      const entries = Object.entries(data).sort((a,b)=>b[1]-a[1]);
+
+      if(entries.length===0){
+        table.innerHTML = "<tr><td>No data</td></tr>";
+        renderPie(0,0,0);
+        return;
+      }
+
+      // Basic auto-categorization for dashboard view
+      const productive = new Set(["leetcode.com","github.com","stackoverflow.com","replit.com","docs.google.com","notion.so"]);
+      const unproductive = new Set(["facebook.com","instagram.com","twitter.com","x.com","tiktok.com","youtube.com"]);
+
+      let tProd=0,tUn=0,tNeut=0;
+      table.innerHTML = "<tr><th>Domain</th><th>Time</th></tr>" + entries.slice(0,20).map(([d,ms])=>{
+        const m = Math.floor(ms/60000), s = Math.floor((ms%60000)/1000);
+        // categorize
+        if(productive.has(d)) tProd+=ms; else if(unproductive.has(d)) tUn+=ms; else tNeut+=ms;
+        return `<tr><td>${d}</td><td>${m}m ${s}s</td></tr>`;
+      }).join("");
+      renderPie(tProd, tUn, tNeut);
+    }
+
+    let pieChart;
+    function renderPie(prod, unprod, neut){
+      const ctx = document.getElementById('pie').getContext('2d');
+      if(pieChart) pieChart.destroy();
+      pieChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+          labels: ['Productive','Unproductive','Neutral'],
+          datasets: [{ data: [prod, unprod, neut] }]
+        }
+      });
+    }
+
+    document.getElementById('load').addEventListener('click', load);
+    load();
+  </script>
+</body>
+</html>
